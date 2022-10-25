@@ -135,13 +135,18 @@ namespace dae
 
 		void UpdateTransforms()
 		{
+			transformedNormals.clear();
+			transformedNormals.reserve(normals.size());
+			transformedPositions.clear();
+			transformedPositions.reserve(positions.size());
+
 			//Calculate Final Transform 
 			const auto finalTransform = scaleTransform * rotationTransform * translationTransform;
-
+			
 			//Transform Positions (positions > transformedPositions)
 			for (auto position : positions)
 				transformedPositions.emplace_back(finalTransform.TransformPoint(position));
-
+			
 			//Transform Normals (normals > transformedNormals)
 			for (auto normal : normals)
 				transformedNormals.emplace_back(finalTransform.TransformVector(normal));
