@@ -10,7 +10,13 @@
 #include "Scene.h"
 #include "Utils.h"
 
+#include <future>	// async
+#include <ppl.h>	// parallel_for
+
 using namespace dae;
+
+#define ASYNC 
+//#define PARALLEL_FOR
 
 Renderer::Renderer(SDL_Window* pWindow) :
 	m_pWindow(pWindow),
@@ -26,106 +32,169 @@ Renderer::Renderer(SDL_Window* pWindow) :
 void Renderer::Render(Scene* pScene) const
 {
 	Camera& camera = pScene->GetCamera();
-	auto& materials = pScene->GetMaterials();
-	auto& lights = pScene->GetLights();
+	camera.CalculateCameraToWorld();
 
 	float aspectRatio{ m_Width / float(m_Height) };
 	float FOV{ tanf((camera.fovAngle * TO_RADIANS) / 2.f) };
 
-	const Matrix cameraToWorld = camera.CalculateCameraToWorld();
+	auto& materials = pScene->GetMaterials();
+	auto& lights = pScene->GetLights();
 
-	for (int px{}; px < m_Width; ++px)
+	const uint32_t numPixels = m_Width * m_Height;
+
+#if defined(ASYNC)
+	//Async execution
+	const uint32_t numCores = std::thread::hardware_concurrency();
+	std::vector<std::future<void>> async_futures{};
+	const uint32_t numPixelsPerTask = numPixels / numCores;
+	uint32_t numUnassignedPixels = numPixels % numCores;
+	uint32_t currPixelIndex = 0;
+
+	for (uint32_t coreId{ 0 }; coreId < numCores; ++coreId)
 	{
-		for (int py{}; py < m_Height; ++py)
+		uint32_t taskSize = numPixelsPerTask;
+		if (numUnassignedPixels > 0)
 		{
-			Vector3 rayDirection{};
-			rayDirection.x = (2 * (px + 0.5f) / float(m_Width) - 1) * aspectRatio * FOV;
-			rayDirection.y = (1 - 2 * (py + 0.5f) / float(m_Height)) * FOV;
-			rayDirection.z = 1;
-
-			rayDirection = cameraToWorld.TransformVector(rayDirection);
-
-			rayDirection.Normalize();
-
-			// For each pixel ...
-			// ... Ray Direction calculations above
-			// Ray we are casting from the camera towards each pixel
-			Ray viewRay{ camera.origin, rayDirection };
-
-			// Color to write to the color buffer (default = black)
-			ColorRGB finalColor = {};
-
-			// HitRecord containing more information about a potential hit
-			HitRecord closestHit{};
-			pScene->GetClosestHit(viewRay, closestHit);
-
-			if (closestHit.didHit)
-			{
-				// If we hit something, set finalColor to material color, else keep black
-				// Use HitRecord::materialIndex to find the corresponding material
-				
-				for (const Light& light : lights)
-				{
-					ColorRGB tempCycleColor{ 1,1,1 };
-
-					const float offSet{ 0.01f };
-					closestHit.origin += closestHit.normal * offSet;
-
-					Vector3 directionToLight = LightUtils::GetDirectionToLight(light, closestHit.origin);
-					auto lightRayLength = directionToLight.Normalize();
-					directionToLight = directionToLight.Normalized();
-
-					Ray lightRay{ closestHit.origin, directionToLight };
-					lightRay.min = offSet;
-					lightRay.max = lightRayLength;
-
-					if (pScene->DoesHit(lightRay) && m_ShadowsEnabled)
-						continue;
-					
-					float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
-
-					switch (m_CurrentLightingMode)
-					{
-					case LightingMode::ObservedArea:
-					{
-						if (lambertCos < 0)
-							continue;
-						tempCycleColor *= ColorRGB{ lambertCos,lambertCos,lambertCos };
-					}
-					break;
-					case LightingMode::Radiance:
-						tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin);
-						break;
-					case LightingMode::BRDF:
-						tempCycleColor *= materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
-						break;
-					case LightingMode::Combined:
-					{
-						if (lambertCos < 0)
-							continue;
-						tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin) * lambertCos
-							* materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
-						break;
-					}
-					}
-
-					finalColor += tempCycleColor;
-				}
-			}
-
-			// Update Color in Buffer
-			finalColor.MaxToOne();
-
-			m_pBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBuffer->format,
-				static_cast<uint8_t>(finalColor.r * 255),
-				static_cast<uint8_t>(finalColor.g * 255),
-				static_cast<uint8_t>(finalColor.b * 255));
+			++taskSize;
+			--numUnassignedPixels;
 		}
+
+		async_futures.push_back(
+			std::async(std::launch::async, [=, this]
+				{
+					const uint32_t pixelIndexEnd = currPixelIndex + taskSize;
+					for (uint32_t pixelIndex{ currPixelIndex }; pixelIndex < pixelIndexEnd; ++pixelIndex)
+					{
+						RenderPerPixel(pScene, pixelIndex, FOV, aspectRatio, camera, lights, materials);
+					}
+				}
+			)
+		);
+
+		currPixelIndex += taskSize;
 	}
+
+	// wait till all tasks are finished
+	for (const std::future<void>& f : async_futures)
+	{
+		f.wait();
+	}
+#elif defined(PARALLEL_FOR)
+	// Parallel for execution
+	concurrency::parallel_for(0u, numPixels, [=, this](int i)
+		{
+			RenderPerPixel(pScene, i, FOV, aspectRatio, camera, lights, materials);
+		});
+#else 
+	// Synchronous Execution
+	for (uint32_t i{0}; i < numPixels; ++i)
+	{
+		RenderPerPixel(pScene, i, FOV, aspectRatio, camera, lights, materials);
+	}
+#endif
 
 	//@END
 	//Update SDL Surface
 	SDL_UpdateWindowSurface(m_pWindow);
+}
+
+void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov, float aspectRatio, const Camera& camera, const std::vector<Light>& lights, const std::vector<Material*>& materials) const
+{
+	const int px = pixelIndex % m_Width;
+	const int py = pixelIndex / m_Width;
+
+	float rx = px + 0.5f;
+	float ry = py + 0.5f;
+
+	float cx = (2 * ((px + 0.5f) / float(m_Width)) - 1) * aspectRatio * fov;
+	float cy = (1 - 2 * ((py + 0.5f) / float(m_Height))) * fov;
+
+	Vector3 rayDirection{};
+	rayDirection.x = cx;
+	rayDirection.y = cy;
+	rayDirection.z = 1;
+
+	rayDirection = camera.cameraToWorld.TransformVector(rayDirection);
+	rayDirection.Normalize();	
+
+	// For each pixel ...
+	// ... Ray Direction calculations above
+	// Ray we are casting from the camera towards each pixel
+	Ray viewRay{ camera.origin, rayDirection };
+
+	// Color to write to the color buffer (default = black)
+	ColorRGB finalColor = {};
+
+	// HitRecord containing more information about a potential hit
+	HitRecord closestHit{};
+	pScene->GetClosestHit(viewRay, closestHit);
+
+	if (closestHit.didHit)
+	{
+		// If we hit something, set finalColor to material color, else keep black
+		// Use HitRecord::materialIndex to find the corresponding material
+
+		for (const Light& light : lights)
+		{
+			ColorRGB tempCycleColor{ 1,1,1 };
+
+			const float offSet{ 0.001f };
+			closestHit.origin += closestHit.normal * offSet;
+
+			Vector3 directionToLight = LightUtils::GetDirectionToLight(light, closestHit.origin);
+			auto lightRayLength = directionToLight.Normalize();
+			directionToLight = directionToLight.Normalized();
+
+
+
+			if (m_ShadowsEnabled)
+			{
+				Ray lightRay{ closestHit.origin, directionToLight };
+				lightRay.min = offSet;
+				lightRay.max = lightRayLength;
+
+				if (pScene->DoesHit(lightRay))
+					continue;
+			}
+
+			float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
+
+			switch (m_CurrentLightingMode)
+			{
+			case LightingMode::ObservedArea:
+			{
+				if (lambertCos < 0)
+					continue;
+				tempCycleColor *= ColorRGB{ lambertCos,lambertCos,lambertCos };
+			}
+			break;
+			case LightingMode::Radiance:
+				tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin);
+				break;
+			case LightingMode::BRDF:
+				tempCycleColor *= materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
+				break;
+			case LightingMode::Combined:
+			{
+				if (lambertCos < 0)
+					continue;
+				tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin) * lambertCos
+					* materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
+				break;
+			}
+			}
+
+			finalColor += tempCycleColor;
+		}
+	}
+
+	// Update Color in Buffer
+	finalColor.MaxToOne();
+
+	m_pBufferPixels[px + (py * m_Width)] = SDL_MapRGB(m_pBuffer->format,
+		static_cast<uint8_t>(finalColor.r * 255),
+		static_cast<uint8_t>(finalColor.g * 255),
+		static_cast<uint8_t>(finalColor.b * 255));
 }
 
 bool Renderer::SaveBufferToImage() const
