@@ -106,14 +106,13 @@ namespace dae
 			Vector3 edgeA = triangle.v1 - triangle.v0;
 			Vector3 edgeB = triangle.v2 - triangle.v1;
 			Vector3 edgeC = triangle.v0 - triangle.v2;
-			Vector3 normal = Vector3::Cross(edgeA, edgeB);
 
-			if (Vector3::Dot(normal, ray.direction) == 0)
+			if (Vector3::Dot(triangle.normal, ray.direction) == 0)
 				return false;
 
 			Vector3 center = { (triangle.v0 + triangle.v1 + triangle.v2) / 3 };
 			Vector3 L = center - ray.origin;
-			float t = Vector3::Dot(L, normal) / Vector3::Dot(ray.direction, normal);
+			float t = Vector3::Dot(L, triangle.normal) / Vector3::Dot(ray.direction, triangle.normal);
 
 			if (t < ray.min || t > ray.max)
 				return false;
@@ -121,15 +120,15 @@ namespace dae
 			Vector3 p = ray.origin + t * ray.direction;
 			
 			Vector3 pointToSideA = p - triangle.v0;
-			if (Vector3::Dot(normal, Vector3::Cross(edgeA, pointToSideA)) < 0)
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeA, pointToSideA)) < 0)
 				return false;
 
 			Vector3 pointToSideB = p - triangle.v1;
-			if (Vector3::Dot(normal, Vector3::Cross(edgeB, pointToSideB)) < 0)
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeB, pointToSideB)) < 0)
 				return false;
 
 			Vector3 pointToSideC = p - triangle.v2;
-			if (Vector3::Dot(normal, Vector3::Cross(edgeC, pointToSideC)) < 0)
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeC, pointToSideC)) < 0)
 				return false;
 
 			if (!ignoreHitRecord)
@@ -138,7 +137,7 @@ namespace dae
 				hitRecord.origin = p;
 				hitRecord.materialIndex = triangle.materialIndex;
 				hitRecord.t = t;
-				hitRecord.normal = normal;
+				hitRecord.normal = triangle.normal;
 			}
 
 			return true;
@@ -155,6 +154,7 @@ namespace dae
 		{
 			//todo W5
 			HitRecord tempHitRecord{};
+			bool hasHit{};
 
 			Triangle triangle{};
 			triangle.cullMode = mesh.cullMode;
@@ -170,13 +170,15 @@ namespace dae
 				
 				if (HitTest_Triangle(triangle, ray, tempHitRecord, ignoreHitRecord))
 				{
-					if (hitRecord.t > tempHitRecord.t)
-						hitRecord = tempHitRecord;
-
-					return true;
+					if (!ignoreHitRecord)
+					{
+						if (hitRecord.t > tempHitRecord.t)
+							hitRecord = tempHitRecord;
+					}
+					hasHit = true;
 				}
 			}
-			return false;
+			return hasHit;
 		}
 
 		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray)
