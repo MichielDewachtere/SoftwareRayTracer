@@ -15,14 +15,14 @@ namespace dae
 		{
 			//todo: W3
 			ColorRGB rho = kd * cd;
-			return rho / M_PI;
+			return rho / PI;
 		}
 
 		static ColorRGB Lambert(const ColorRGB& kd, const ColorRGB& cd)
 		{
 			//todo: W3
 			ColorRGB rho = kd * cd;
-			return rho / M_PI;
+			return rho / PI;
 		}
 
 		/**

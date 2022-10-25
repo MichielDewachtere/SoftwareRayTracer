@@ -53,7 +53,7 @@ namespace dae
 		{
 			const float deltaTime = pTimer->GetElapsed();
 			const float moveSpeed = 10.f;
-			const float rotationSpeed = M_PI / 2.f;
+			const float rotationSpeed = PI / 2.f;
 
 			// Keyboard Input
 			HandleKeyboardInput(deltaTime, moveSpeed);
