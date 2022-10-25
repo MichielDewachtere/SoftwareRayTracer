@@ -281,35 +281,7 @@ namespace dae {
 		AddPlane({ 5.f, 0.f, 0.f }, { -1.f, 0.f,0.f }, matLambert_GrayBlue); // RIGHT
 		AddPlane({ -5.f, 0.f, 0.f }, { 1.f, 0.f,0.f }, matLambert_GrayBlue); // LEFT		
 
-		/*
-		//Triangle (temp)
-		auto triangle = Triangle{ {-.75f,.5f,0.f},{-.75f,2.f,0.f},{.75f,.5f,0.f} };
-		triangle.cullMode = TriangleCullMode::FrontFaceCulling;
-		triangle.materialIndex = matLambert_White;
-
-		m_Triangles.emplace_back(triangle);
-		*/
-
 		//Triangle Mesh
-		/*
-		pMesh = AddTriangleMesh(TriangleCullMode::NoCulling, matLambert_White);
-		pMesh->positions = {
-			{-.75f,-1.f,.0f},	//V0
-			{-.75f,1.f,0.f},	//V1
-			{.75f,1.f,1.f},		//V2
-			{.75f,-1.f,0.f}		//V3
-		};
-
-		pMesh->indices = {
-			0,1,2,	// triangle 1
-			0,2,3	// triangle 2
-		};
-
-		pMesh->CalculateNormals();
-
-		pMesh->Translate({ 0.f, 1.5f, 0.f });
-		pMesh->UpdateTransforms();
-		*/
 		pMesh = AddTriangleMesh(TriangleCullMode::BackFaceCulling, matLambert_White);
 		Utils::ParseOBJ("Resources/simple_cube.obj",
 			pMesh->positions,
@@ -317,6 +289,7 @@ namespace dae {
 			pMesh->indices);
 
 		//No need to calculate the normals, these are calculated inside the ParseOBJ function
+		pMesh->RotateY(PI_DIV_2);
 		pMesh->Scale({ .7f,.7f,.7f });
 		pMesh->Translate({ .0f,1.f,.0f }); 
 
@@ -429,8 +402,6 @@ namespace dae {
 				pMesh->indices);
 
 			//No need to calculate the normals, these are calculated inside the ParseOBJ function
-			//pMesh->RotateY(M_PI);
-
 			pMesh->UpdateTransforms();
 
 			//Light
