@@ -15,8 +15,8 @@
 
 using namespace dae;
 
-#define ASYNC 
-//#define PARALLEL_FOR
+//#define ASYNC 
+#define PARALLEL_FOR
 
 Renderer::Renderer(SDL_Window* pWindow) :
 	m_pWindow(pWindow),
@@ -144,7 +144,6 @@ void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov
 			Vector3 directionToLight = LightUtils::GetDirectionToLight(light, closestHit.origin);
 			auto lightRayLength = directionToLight.Normalize();
 			directionToLight = directionToLight.Normalized();
-
 
 
 			if (m_ShadowsEnabled)
