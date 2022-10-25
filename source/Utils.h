@@ -16,13 +16,15 @@ namespace dae
 			//todo W1
 			float dp = Vector3::Dot(sphere.origin - ray.origin, ray.direction);
 			float tclSquared = (sphere.origin - ray.origin).SqrMagnitude();
+			
 			float odSquared = tclSquared - (dp * dp);
+			if (odSquared > sphere.radius * sphere.radius)
+				return false;
+
 			float tcaSquared = sphere.radius * sphere.radius - odSquared;
 			float t0 = dp - sqrt(tcaSquared);
 
-			if (odSquared < sphere.radius * sphere.radius
-				&& t0 < ray.max 
-				&& t0 > ray.min)
+			if (t0 < ray.max && t0 > ray.min)
 			{
 				if (!ignoreHitRecord)
 				{
