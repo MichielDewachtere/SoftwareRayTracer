@@ -31,33 +31,23 @@ namespace dae {
 		//todo W1
 		HitRecord tempHitRecord{};
 
-		for (int i{}; i < GetSphereGeometries().size(); ++i)
+		for (const Sphere& sphereMesh : m_SphereGeometries)
 		{
-			GeometryUtils::HitTest_Sphere(GetSphereGeometries()[i], ray, tempHitRecord, false);
+			GeometryUtils::HitTest_Sphere(sphereMesh, ray, tempHitRecord, false);
 			if (tempHitRecord.t < closestHit.t && tempHitRecord.t > 0)
 			{
 				closestHit = tempHitRecord;
 			}
 		}
 
-		for (int i{}; i < GetPlaneGeometries().size(); ++i)
+		for (const Plane& planeMesh : m_PlaneGeometries)
 		{
-			GeometryUtils::HitTest_Plane(GetPlaneGeometries()[i], ray, tempHitRecord, false);
+			GeometryUtils::HitTest_Plane(planeMesh, ray, tempHitRecord, false);
 			if (tempHitRecord.t < closestHit.t && tempHitRecord.t > 0)
 			{
 				closestHit = tempHitRecord;
 			}
 		}
-
-		//// Temp (individual triangle testing)
-		//for (int i{}; i < m_Triangles.size(); ++i)
-		//{
-		//	GeometryUtils::HitTest_Triangle(m_Triangles[i], ray, tempHitRecord, false);
-		//	if (tempHitRecord.t < closestHit.t && tempHitRecord.t > 0)
-		//	{
-		//		closestHit = tempHitRecord;
-		//	}
-		//}
 
 		for (const TriangleMesh& triangleMesh : m_TriangleMeshGeometries)
 		{
