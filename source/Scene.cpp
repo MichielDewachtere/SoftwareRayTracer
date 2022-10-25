@@ -78,15 +78,6 @@ namespace dae {
 			}
 		}
 
-		//// Temp (individual triangle testing)
-		//for (int i{}; i < m_Triangles.size(); ++i)
-		//{
-		//	if (GeometryUtils::HitTest_Triangle(m_Triangles[i], ray))
-		//	{
-		//		return true;
-		//	}
-		//}
-
 		for (const TriangleMesh& triangleMesh : m_TriangleMeshGeometries)
 		{
 			if (GeometryUtils::HitTest_TriangleMesh(triangleMesh, ray))
@@ -362,6 +353,7 @@ namespace dae {
 		for (const auto m : m_Meshes)
 		{
 			m->RotateY(yawAngle);
+			m->UpdateAABB();
 			m->UpdateTransforms();
 		}
 	}
@@ -392,6 +384,7 @@ namespace dae {
 				pMesh->indices);
 
 			//No need to calculate the normals, these are calculated inside the ParseOBJ function
+			pMesh->UpdateAABB();
 			pMesh->UpdateTransforms();
 
 			//Light
