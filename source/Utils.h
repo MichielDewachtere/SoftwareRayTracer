@@ -15,29 +15,28 @@ namespace dae
 		{
 			//todo W1
 			float dp = Vector3::Dot(sphere.origin - ray.origin, ray.direction);
-			float tclSquared = (sphere.origin - ray.origin).SqrMagnitude();
 			
+			float tclSquared = (sphere.origin - ray.origin).SqrMagnitude();
+
 			float odSquared = tclSquared - (dp * dp);
 			if (odSquared > sphere.radius * sphere.radius)
 				return false;
 
 			float tcaSquared = sphere.radius * sphere.radius - odSquared;
+
 			float t0 = dp - sqrt(tcaSquared);
+			if (t0 < ray.min || t0 > ray.max)
+				return false;
 
-			if (t0 < ray.max && t0 > ray.min)
+			if (!ignoreHitRecord)
 			{
-				if (!ignoreHitRecord)
-				{
-					hitRecord.origin = ray.origin + ray.direction * t0;
-					hitRecord.normal = Vector3{ hitRecord.origin - sphere.origin } / sphere.radius;
-					hitRecord.t = t0;
-					hitRecord.didHit = true;
-					hitRecord.materialIndex = sphere.materialIndex;
-				}
-				return true;
+				hitRecord.origin = ray.origin + ray.direction * t0;
+				hitRecord.normal = Vector3{ hitRecord.origin - sphere.origin } / sphere.radius;
+				hitRecord.t = t0;
+				hitRecord.didHit = true;
+				hitRecord.materialIndex = sphere.materialIndex;
 			}
-
-			return false;
+			return true;
 		}
 
 		inline bool HitTest_Sphere(const Sphere& sphere, const Ray& ray)
@@ -51,20 +50,25 @@ namespace dae
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			//todo W1 COMPLETED
-			const float t = Vector3::Dot((plane.origin - ray.origin), plane.normal) / Vector3::Dot(ray.direction, plane.normal);
-			if (t > ray.min && t < ray.max)
+			float dot2 = Vector3::Dot(ray.direction, plane.normal);
+			if (dot2 == 0)
+				return false;
+
+			float dot = Vector3::Dot((plane.origin - ray.origin), plane.normal);
+
+			const float t = dot / dot2;
+			if (t < ray.min || t > ray.max)
+				return false;
+
+			if (!ignoreHitRecord)
 			{
-				if (!ignoreHitRecord)
-				{
-					hitRecord.didHit = true;
-					hitRecord.origin = ray.origin + ray.direction * t;
-					hitRecord.materialIndex = plane.materialIndex;
-					hitRecord.t = t;
-					hitRecord.normal = plane.normal;
-				}
-				return true;
+				hitRecord.didHit = true;
+				hitRecord.origin = ray.origin + ray.direction * t;
+				hitRecord.materialIndex = plane.materialIndex;
+				hitRecord.t = t;
+				hitRecord.normal = plane.normal;
 			}
-			return false;
+			return true;
 		}
 
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray)
@@ -105,9 +109,6 @@ namespace dae
 				break;
 			}
 
-			Vector3 edgeA = triangle.v1 - triangle.v0;
-			Vector3 edgeB = triangle.v2 - triangle.v1;
-			Vector3 edgeC = triangle.v0 - triangle.v2;
 
 			if (Vector3::Dot(triangle.normal, ray.direction) == 0)
 				return false;
@@ -121,16 +122,19 @@ namespace dae
 
 			Vector3 p = ray.origin + t * ray.direction;
 			
-			Vector3 pointToSideA = p - triangle.v0;
-			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeA, pointToSideA)) < 0)
+			Vector3 edgeA = triangle.v1 - triangle.v0;
+			Vector3 pointToSide = p - triangle.v0;
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeA, pointToSide)) < 0)
 				return false;
 
-			Vector3 pointToSideB = p - triangle.v1;
-			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeB, pointToSideB)) < 0)
+			Vector3 edgeB = triangle.v2 - triangle.v1;
+			pointToSide = p - triangle.v1;
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeB, pointToSide)) < 0)
 				return false;
 
-			Vector3 pointToSideC = p - triangle.v2;
-			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeC, pointToSideC)) < 0)
+			Vector3 edgeC = triangle.v0 - triangle.v2;
+			pointToSide = p - triangle.v2;
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeC, pointToSide)) < 0)
 				return false;
 
 			if (!ignoreHitRecord)
@@ -152,9 +156,8 @@ namespace dae
 		}
 #pragma endregion
 #pragma region TriangeMesh HitTest
-		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
+		inline bool SlabTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray)
 		{
-			//slabTest
 			float tx1 = (mesh.transformedMinAABB.x - ray.origin.x) / ray.direction.x;
 			float tx2 = (mesh.transformedMaxAABB.x - ray.origin.x) / ray.direction.x;
 
@@ -164,16 +167,21 @@ namespace dae
 			float ty1 = (mesh.transformedMinAABB.y - ray.origin.y) / ray.direction.y;
 			float ty2 = (mesh.transformedMaxAABB.y - ray.origin.y) / ray.direction.y;
 
-			tmin = std::min(tmin, std::max(ty1, ty2));
-			tmax = std::max(tmax, std::max(ty1, ty2));
+			tmin = std::min(ty1, ty2);
+			tmax = std::max(ty1, ty2);
 
 			float tz1 = (mesh.transformedMinAABB.z - ray.origin.z) / ray.direction.z;
 			float tz2 = (mesh.transformedMaxAABB.z - ray.origin.z) / ray.direction.z;
 
-			tmin = std::min(tmin, std::max(tz1, tz2));
-			tmax = std::max(tmax, std::max(tz1, tz2));
+			tmin = std::min(tz1, tz2);
+			tmax = std::max(tz1, tz2);
 
-			if( !(tmax > 0 && tmax >= tmin) )
+			return tmax > 0 && tmax >= tmin;
+		}
+
+		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
+		{
+			if (!SlabTest_TriangleMesh(mesh, ray))
 				return false;
 
 			HitRecord tempHitRecord{};
@@ -208,29 +216,6 @@ namespace dae
 		{
 			HitRecord temp{};
 			return HitTest_TriangleMesh(mesh, ray, temp, true);
-		}
-
-		inline bool SlabTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray)
-		{
-			float tx1 = (mesh.transformedMinAABB.x - ray.origin.x) / ray.direction.x;
-			float tx2 = (mesh.transformedMaxAABB.x - ray.origin.x) / ray.direction.x;
-
-			float tmin = std::min(tx1, tx2);
-			float tmax = std::max(tx1, tx2);
-
-			float ty1 = (mesh.transformedMinAABB.y - ray.origin.y) / ray.direction.y;
-			float ty2 = (mesh.transformedMaxAABB.y - ray.origin.y) / ray.direction.y;
-
-			tmin = std::min(ty1, ty2);
-			tmax = std::max(ty1, ty2);
-
-			float tz1 = (mesh.transformedMinAABB.z - ray.origin.z) / ray.direction.z;
-			float tz2 = (mesh.transformedMaxAABB.z - ray.origin.z) / ray.direction.z;
-
-			tmin = std::min(tz1, tz2);
-			tmax = std::max(tz1, tz2);
-
-			return tmax > 0 && tmax >= tmin;
 		}
 #pragma endregion
 	}
