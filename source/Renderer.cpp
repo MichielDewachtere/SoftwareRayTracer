@@ -115,7 +115,7 @@ void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov
 	rayDirection.z = 1;
 
 	rayDirection = camera.cameraToWorld.TransformVector(rayDirection);
-	rayDirection.Normalize();	
+	rayDirection.Normalize();
 
 	// For each pixel ...
 	// ... Ray Direction calculations above
@@ -142,12 +142,11 @@ void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov
 			closestHit.origin += closestHit.normal * offSet;
 
 			Vector3 directionToLight = LightUtils::GetDirectionToLight(light, closestHit.origin);
-			auto lightRayLength = directionToLight.Normalize();
-			directionToLight = directionToLight.Normalized();
-
-
+			
 			if (m_ShadowsEnabled)
 			{
+				auto lightRayLength = directionToLight.Normalize();
+
 				Ray lightRay{ closestHit.origin, directionToLight };
 				lightRay.min = offSet;
 				lightRay.max = lightRayLength;
@@ -156,6 +155,8 @@ void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov
 					continue;
 			}
 
+			directionToLight = directionToLight.Normalized();
+			
 			float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
 
 			switch (m_CurrentLightingMode)
