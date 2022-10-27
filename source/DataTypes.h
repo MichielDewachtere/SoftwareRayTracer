@@ -206,7 +206,7 @@ namespace dae
 			tAABB = finalTransform.TransformPoint(maxAABB.x, maxAABB.y, maxAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmin, ymax, zmax)
+			// (xmin, ymax, zmin)
 			tAABB = finalTransform.TransformPoint(minAABB.x, maxAABB.y, minAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
