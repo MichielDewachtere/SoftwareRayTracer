@@ -383,15 +383,21 @@ namespace dae {
 				pMesh->normals,
 				pMesh->indices);
 
-			//No need to calculate the normals, these are calculated inside the ParseOBJ function
-			pMesh->UpdateAABB();
-			pMesh->UpdateTransforms();
-
 			//Light
 			AddPointLight({ 0.f,5.f,5.f }, 50.f, ColorRGB{ 1.f,.61f,.45f }); // Backlight
 			AddPointLight({ -2.5f,5.f,-5.f }, 70.f, ColorRGB{ 1.f,.8f,.45f }); // Frontlight left
 			AddPointLight({ 2.5f,2.5f,-5.f }, 50.f, ColorRGB{ .34f,.47f,.68f });
 		}
+	}
+	void Scene_W4_BunnyScene::Update(Timer* pTimer)
+	{
+		Scene::Update(pTimer);
+
+		const auto yawAngle = (cos(pTimer->GetTotal()) + 1.f) / 2.f * PI_2;
+
+		pMesh->RotateY(yawAngle);
+		pMesh->UpdateAABB();
+		pMesh->UpdateTransforms();
 	}
 #pragma endregion
 }
