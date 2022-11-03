@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "Vector3.h"
+#include "Utils.h"
 #include <cmath>
 
 namespace dae
@@ -12,7 +13,8 @@ namespace dae
 
 	float Vector4::Magnitude() const
 	{
-		return sqrtf(x * x + y * y + z * z + w * w);
+		return sqrt(x * x + y * y + z * z + w * w);
+		//return Utils::fastSqrt(x * x + y * y + z * z + w * w);
 	}
 
 	float Vector4::SqrMagnitude() const
