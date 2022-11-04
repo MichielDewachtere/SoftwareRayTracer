@@ -83,7 +83,7 @@ void Renderer::Render(Scene* pScene) const
 	// Parallel for execution
 	concurrency::parallel_for(0u, numPixels, [=, this](int i)
 		{
-			RenderPerPixel(pScene, i, FOV, aspectRatio, camera, lights, materials);
+			RenderPixel(pScene, i, FOV, aspectRatio, camera, lights, materials);
 		});
 #else 
 	// Synchronous Execution
@@ -98,16 +98,16 @@ void Renderer::Render(Scene* pScene) const
 	SDL_UpdateWindowSurface(m_pWindow);
 }
 
-void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov, float aspectRatio, const Camera& camera, const std::vector<Light>& lights, const std::vector<Material*>& materials) const
+void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, float aspectRatio, const Camera& camera, const std::vector<Light>& lights, const std::vector<Material*>& materials) const
 {
 	const int px = pixelIndex % m_Width;
 	const int py = pixelIndex / m_Width;
 
-	float rx = px + 0.5f;
-	float ry = py + 0.5f;
+	const float rx = px + 0.5f;
+	const float ry = py + 0.5f;
 
-	float cx = (2 * ((px + 0.5f) / float(m_Width)) - 1) * aspectRatio * fov;
-	float cy = (1 - 2 * ((py + 0.5f) / float(m_Height))) * fov;
+	const float cx = (2 * ((px) / float(m_Width)) - 1) * aspectRatio * fov;
+	const float cy = (1 - 2 * ((py) / float(m_Height))) * fov;
 
 	Vector3 rayDirection{};
 	rayDirection.x = cx;
@@ -116,7 +116,7 @@ void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov
 
 	rayDirection = camera.cameraToWorld.TransformVector(rayDirection);
 	rayDirection.Normalize();
-
+		
 	// For each pixel ...
 	// ... Ray Direction calculations above
 	// Ray we are casting from the camera towards each pixel
@@ -133,19 +133,18 @@ void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov
 	{
 		// If we hit something, set finalColor to material color, else keep black
 		// Use HitRecord::materialIndex to find the corresponding material
-
 		for (const Light& light : lights)
 		{
-			ColorRGB tempCycleColor{ 1,1,1 };
+			ColorRGB tempCycleColor = colors::White;
 
-			const float offSet{ 0.00001f };
+			const float offSet{ 0.001f };
 			closestHit.origin += closestHit.normal * offSet;
 
 			Vector3 directionToLight = LightUtils::GetDirectionToLight(light, closestHit.origin);
 			
 			if (m_ShadowsEnabled)
 			{
-				auto lightRayLength = directionToLight.Normalize();
+				const float lightRayLength = directionToLight.Normalize();
 
 				Ray lightRay{ closestHit.origin, directionToLight };
 				lightRay.min = offSet;
@@ -180,7 +179,7 @@ void dae::Renderer::RenderPerPixel(Scene* pScene, uint32_t pixelIndex, float fov
 					* materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
 				break;
 			}
-			}
+			}	
 
 			finalColor += tempCycleColor;
 		}

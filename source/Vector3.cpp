@@ -20,8 +20,8 @@ namespace dae {
 
 	float Vector3::Magnitude() const
 	{
-		return sqrt(x * x + y * y + z * z);
-		//return Utils::fastSqrt(x * x + y * y + z * z);
+		//return sqrt(x * x + y * y + z * z);
+		return Utils::fastSqrt(x * x + y * y + z * z);
 	}
 
 	float Vector3::SqrMagnitude() const

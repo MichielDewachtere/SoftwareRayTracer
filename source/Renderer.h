@@ -27,7 +27,7 @@ namespace dae
 
 		void Render(Scene* pScene) const;
 
-		void RenderPerPixel(Scene* pScene, 
+		void RenderPixel(Scene* pScene, 
 			uint32_t pixelIndex, 
 			float fov, 
 			float aspectRatio, 
