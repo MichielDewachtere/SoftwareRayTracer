@@ -320,23 +320,23 @@ namespace dae
 #pragma region TriangeMesh HitTest
 		inline bool SlabTest_TriangleMesh(Vector3 minAABB, Vector3 maxAABB, const Ray& ray)
 		{
-			float tx1 = (minAABB.x - ray.origin.x) / ray.direction.x;
-			float tx2 = (maxAABB.x - ray.origin.x) / ray.direction.x;
+			const float tx1 = (minAABB.x - ray.origin.x) / ray.direction.x;
+			const float tx2 = (maxAABB.x - ray.origin.x) / ray.direction.x;
 
 			float tmin = std::min(tx1, tx2);
 			float tmax = std::max(tx1, tx2);
 
-			float ty1 = (minAABB.y - ray.origin.y) / ray.direction.y;
-			float ty2 = (maxAABB.y - ray.origin.y) / ray.direction.y;
+			const float ty1 = (minAABB.y - ray.origin.y) / ray.direction.y;
+			const float ty2 = (maxAABB.y - ray.origin.y) / ray.direction.y;
 
 			tmin = std::max(tmin, std::min(ty1, ty2));
-			tmax = std::min(tmin, std::max(ty1, ty2));
+			tmax = std::min(tmax, std::max(ty1, ty2));
 
-			float tz1 = (minAABB.z - ray.origin.z) / ray.direction.z;
-			float tz2 = (maxAABB.z - ray.origin.z) / ray.direction.z;
+			const float tz1 = (minAABB.z - ray.origin.z) / ray.direction.z;
+			const float tz2 = (maxAABB.z - ray.origin.z) / ray.direction.z;
 
 			tmin = std::max(tmin, std::min(tz1, tz2));
-			tmax = std::min(tmin, std::max(ty1, ty2));
+			tmax = std::min(tmax, std::max(tz1, tz2));
 
 			return tmax > 0 && tmax >= tmin;
 		}
