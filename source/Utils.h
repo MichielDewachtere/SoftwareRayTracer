@@ -6,14 +6,13 @@
 #include <iostream>
 #include <xmmintrin.h>
 
+#define UINT unsigned int
 
 namespace dae
 {
 	namespace Utils
 	{
-		inline float fastSqrt(float arg) {
-//			return std::sqrt(arg);
-			
+		inline float fastSqrt(float arg) {		
 			return _mm_cvtss_f32(
 				_mm_sqrt_ss(_mm_set_ps1(arg))
 			);
@@ -109,8 +108,8 @@ namespace dae
 
 			float tcaSquared = sphere.radius * sphere.radius - odSquared;
 
-			float t0 = dp - sqrt(tcaSquared);
-			//float t0 = dp - Utils::fastSqrt(tcaSquared);
+			//float t0 = dp - sqrt(tcaSquared);
+			float t0 = dp - Utils::fastSqrt(tcaSquared);
 
 			if (t0 < ray.min || t0 > ray.max)
 				return false;
@@ -136,10 +135,8 @@ namespace dae
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			//todo W1 COMPLETED
-			const float epsilon = 0.0000001f;
-
 			float dot2 = Vector3::Dot(ray.direction, plane.normal);
-			if (dot2 < -epsilon && dot2 > epsilon)
+			if (dot2 > -FLT_EPSILON && dot2 < FLT_EPSILON)
 				return false;
 
 			float dot = Vector3::Dot((plane.origin - ray.origin), plane.normal);
@@ -275,31 +272,29 @@ namespace dae
 			// Möller–Trumbore intersection algorithm. (2022, July 23). In Wikipedia.
 			// https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
 
-			const float epsilon = 0.0000001f;
-
 			Vector3 edgeA = triangle.v1 - triangle.v0;
 			Vector3 edgeB = triangle.v2 - triangle.v0;
 
 			Vector3 h = Vector3::Cross(ray.direction, edgeB);
 			float a = Vector3::Dot(edgeA, h);
 
-			if (a < -epsilon && a > epsilon)
+			if (a < -FLT_EPSILON && a > FLT_EPSILON)
 				return false; // This ray is parallel to this triangle
 
-			float f = 1.f / a;
-			Vector3 s = ray.origin - triangle.v0;
-			float u = f * Vector3::Dot(s, h);
+			const float f = 1.f / a;
+			const Vector3 s = ray.origin - triangle.v0;
+			const float u = f * Vector3::Dot(s, h);
 
 			if (u < 0.f || u > 1.f)
 				return false;
 
-			Vector3 q = Vector3::Cross(s, edgeA);
-			float v = f * Vector3::Dot(ray.direction, q);
+			const Vector3 q = Vector3::Cross(s, edgeA);
+			const float v = f * Vector3::Dot(ray.direction, q);
 			if (v < 0.f || u + v > 1.f)
 				return false;
 
 			// At this stage we can compute t to find out where the intersection point is on the line
-			float t = f * Vector3::Dot(edgeB, q);
+			const float t = f * Vector3::Dot(edgeB, q);
 
 			if (t > ray.max || t < ray.min)
 				return false;
@@ -323,22 +318,22 @@ namespace dae
 
 #pragma endregion
 #pragma region TriangeMesh HitTest
-		inline bool SlabTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray)
+		inline bool SlabTest_TriangleMesh(Vector3 minAABB, Vector3 maxAABB, const Ray& ray)
 		{
-			float tx1 = (mesh.transformedMinAABB.x - ray.origin.x) / ray.direction.x;
-			float tx2 = (mesh.transformedMaxAABB.x - ray.origin.x) / ray.direction.x;
+			float tx1 = (minAABB.x - ray.origin.x) / ray.direction.x;
+			float tx2 = (maxAABB.x - ray.origin.x) / ray.direction.x;
 
 			float tmin = std::min(tx1, tx2);
 			float tmax = std::max(tx1, tx2);
 
-			float ty1 = (mesh.transformedMinAABB.y - ray.origin.y) / ray.direction.y;
-			float ty2 = (mesh.transformedMaxAABB.y - ray.origin.y) / ray.direction.y;
+			float ty1 = (minAABB.y - ray.origin.y) / ray.direction.y;
+			float ty2 = (maxAABB.y - ray.origin.y) / ray.direction.y;
 
 			tmin = std::max(tmin, std::min(ty1, ty2));
 			tmax = std::min(tmin, std::max(ty1, ty2));
 
-			float tz1 = (mesh.transformedMinAABB.z - ray.origin.z) / ray.direction.z;
-			float tz2 = (mesh.transformedMaxAABB.z - ray.origin.z) / ray.direction.z;
+			float tz1 = (minAABB.z - ray.origin.z) / ray.direction.z;
+			float tz2 = (maxAABB.z - ray.origin.z) / ray.direction.z;
 
 			tmin = std::max(tmin, std::min(tz1, tz2));
 			tmax = std::min(tmin, std::max(ty1, ty2));
@@ -346,17 +341,60 @@ namespace dae
 			return tmax > 0 && tmax >= tmin;
 		}
 
+		inline void IntersectBVH(const TriangleMesh& mesh, const Ray& ray, const UINT nodeIdx, 
+			bool& hasHit, HitRecord& hitRecord, bool ignoreHitRecord,
+			HitRecord& tempHitRecord, Triangle& triangle)
+		{
+			BVHNode& node = mesh.pBVHNodes[nodeIdx];
+
+			if (!SlabTest_TriangleMesh(node.aabbMin, node.aabbMax, ray)) return;
+
+			if (node.primCount <= 0)
+			{
+				IntersectBVH(mesh, ray, node.leftChild, hasHit, hitRecord, ignoreHitRecord, tempHitRecord, triangle);
+				IntersectBVH(mesh, ray, node.leftChild + 1, hasHit, hitRecord, ignoreHitRecord, tempHitRecord, triangle);
+				return;
+			}
+
+			// For each triangle in the node
+			for (UINT i{}; i < node.primCount; i += 3)
+			{
+				// Set the position and normal of the current triangle to the triangle object
+				triangle.v0 = mesh.transformedPositions[mesh.indices[node.firstPrim + i]];
+				triangle.v1 = mesh.transformedPositions[mesh.indices[node.firstPrim + i + 1]];
+				triangle.v2 = mesh.transformedPositions[mesh.indices[node.firstPrim + i + 2]];
+				triangle.normal = mesh.transformedNormals[(node.firstPrim + i) / 3];
+
+				if (HitTest_Triangle_MöllerTrumbore(triangle, ray, tempHitRecord, ignoreHitRecord))
+				{
+					if (!ignoreHitRecord)
+					{
+
+						if (hitRecord.t > tempHitRecord.t)
+							hitRecord = tempHitRecord;
+					}
+					hasHit = true;
+				}
+				else	
+					continue;
+			}
+		}
+
 		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
-			if (!SlabTest_TriangleMesh(mesh, ray))
-				return false;
+			bool hasHit{};
 
 			HitRecord tempHitRecord{};
-			bool hasHit{};
 
 			Triangle triangle{};
 			triangle.cullMode = mesh.cullMode;
 			triangle.materialIndex = mesh.materialIndex;
+
+#ifdef USE_BVH
+			IntersectBVH(mesh, ray, 0, hasHit, hitRecord, ignoreHitRecord, tempHitRecord, triangle);
+#else
+			if (!SlabTest_TriangleMesh(mesh.transformedMinAABB, mesh.transformedMaxAABB, ray))
+				return false;
 
 			for (size_t i{}; i < mesh.indices.size(); i += 3)
 			{
@@ -366,7 +404,6 @@ namespace dae
 
 				triangle.normal = mesh.transformedNormals[i / 3];
 			
-				//if (HitTest_Triangle(triangle, ray, tempHitRecord, ignoreHitRecord))
 				if (HitTest_Triangle_MöllerTrumbore(triangle, ray, tempHitRecord, ignoreHitRecord))
 				{
 					if (!ignoreHitRecord)
@@ -377,6 +414,8 @@ namespace dae
 					hasHit = true;
 				}
 			}
+#endif // USE_BVH
+
 			return hasHit;
 		}
 
@@ -420,6 +459,4 @@ namespace dae
 			return E;
 		}
 	}
-
-
 }

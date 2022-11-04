@@ -4,6 +4,9 @@
 #include "Math.h"
 #include "vector"
 
+#define UINT unsigned int
+//#define USE_BVH
+
 namespace dae
 {
 #pragma region GEOMETRY
@@ -30,11 +33,22 @@ namespace dae
 		NoCulling
 	};
 
+	// How to build a BVH. (2022, April 13). From JBikker
+	// https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+
+	struct BVHNode
+	{
+		Vector3 aabbMin, aabbMax;	// 24 bytes
+		UINT leftChild;				// 4 bytes
+		UINT firstPrim;				// 4 bytes
+		UINT primCount;				// 4 bytes; total: 36 bytes
+	};
+
 	struct Triangle
 	{
 		Triangle() = default;
-		Triangle(const Vector3& _v0, const Vector3& _v1, const Vector3& _v2, const Vector3& _normal):
-			v0{_v0}, v1{_v1}, v2{_v2}, normal{_normal.Normalized()}{}
+		Triangle(const Vector3& _v0, const Vector3& _v1, const Vector3& _v2, const Vector3& _normal) :
+			v0{ _v0 }, v1{ _v1 }, v2{ _v2 }, normal{ _normal.Normalized() } {}
 
 		Triangle(const Vector3& _v0, const Vector3& _v1, const Vector3& _v2) :
 			v0{ _v0 }, v1{ _v1 }, v2{ _v2 }
@@ -73,6 +87,11 @@ namespace dae
 			UpdateTransforms();
 		}
 
+		~TriangleMesh()
+		{
+			delete[] pBVHNodes;
+		}
+
 		std::vector<Vector3> positions{};
 		std::vector<Vector3> normals{};
 		std::vector<int> indices{};
@@ -92,6 +111,10 @@ namespace dae
 
 		std::vector<Vector3> transformedPositions{};
 		std::vector<Vector3> transformedNormals{};
+
+		BVHNode* pBVHNodes{};
+		UINT rootNodeIdx{};
+		UINT nodesUsed{};
 
 		void Translate(const Vector3& translation)
 		{
@@ -180,33 +203,45 @@ namespace dae
 		{
 			// AABB update: be careful -> transform the 8 vertices of the aabb
 			// and alculate new min and max
+			
+			//    H--------G
+			//   /|       /|
+			//  / |      / |
+			// E--------F  |
+			// |  |     |  |
+			// |  D-----|--C
+			// | /      | /
+			// |/       |/
+			// A--------B
+
+			// (xmin, ymin, zmin) A
 			Vector3 tMinAABB = finalTransform.TransformPoint(minAABB);
 			Vector3 tMaxAABB = tMinAABB;
-			// (xmax, ymin, zmin)
+			// (xmax, ymin, zmin) B
 			Vector3 tAABB = finalTransform.TransformPoint(maxAABB.x, minAABB.y, minAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmax, ymin, zmax)
+			// (xmax, ymin, zmax) C
 			tAABB = finalTransform.TransformPoint(maxAABB.x, minAABB.y, maxAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmin, ymin, zmax)
+			// (xmin, ymin, zmax) D
 			tAABB = finalTransform.TransformPoint(minAABB.x, minAABB.y, maxAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmin, ymax, zmin)
+			// (xmin, ymax, zmin) E
 			tAABB = finalTransform.TransformPoint(minAABB.x, maxAABB.y, minAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmax, ymax, zmin)
+			// (xmax, ymax, zmin) F
 			tAABB = finalTransform.TransformPoint(maxAABB.x, maxAABB.y, minAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmax, ymax, zmax)
+			// (xmax, ymax, zmax) G
 			tAABB = finalTransform.TransformPoint(maxAABB.x, maxAABB.y, maxAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmin, ymax, zmin)
+			// (xmin, ymax, zmin) H
 			tAABB = finalTransform.TransformPoint(minAABB.x, maxAABB.y, minAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
@@ -214,6 +249,104 @@ namespace dae
 			transformedMinAABB = tMinAABB;
 			transformedMaxAABB = tMaxAABB;
 		}
+
+// How to build a BVH. (2022, April 13). From JBikker
+// https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
+#pragma region BVH
+		void UpdateBVH()
+		{
+			nodesUsed = 0;
+
+			BVHNode& root = pBVHNodes[rootNodeIdx];
+			root.leftChild = 0;
+			root.firstPrim = 0;
+			root.primCount = static_cast<UINT>(indices.size());
+
+			UpdateNodeBounds(rootNodeIdx);
+
+			Subdivide(rootNodeIdx);
+		}
+
+		void UpdateNodeBounds(UINT nodeIdx)
+		{
+			BVHNode& node = pBVHNodes[nodeIdx];
+			node.aabbMin = Vector3({ FLT_MAX, FLT_MAX, FLT_MAX });
+			node.aabbMax = Vector3({ FLT_MIN, FLT_MIN, FLT_MIN });
+
+			for (UINT i{ node.firstPrim }; i < node.firstPrim + node.primCount; ++i)
+			{
+				Vector3& vertex{ transformedPositions[indices[i]] };
+
+				node.aabbMin = Vector3::Min(node.aabbMin, vertex);
+				node.aabbMax = Vector3::Max(node.aabbMax, vertex);
+			}
+		}
+
+		void Subdivide(UINT nodeIdx)
+		{
+			// terminate recursion
+			BVHNode& node = pBVHNodes[nodeIdx];
+			if (node.primCount <= 6) return;
+
+			// determine split axis and position
+			Vector3 extent = node.aabbMax - node.aabbMin;
+			int axis = 0;
+			if (extent.y > extent.x) axis = 1;
+			if (extent.z > extent[axis]) axis = 2;
+			float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
+
+			// in-place partition
+			int i = static_cast<int>(node.firstPrim);
+			int j = i + static_cast<int>(node.primCount) - 1;
+			while (i <= j)
+			{
+				Vector3 centroid = { 
+					(transformedPositions[indices[i]] 
+					+ transformedPositions[indices[i + 1]] 
+					+ transformedPositions[indices[i + 2]]) 
+					/ 3.0f };
+			
+
+				if (centroid[axis] < splitPos)
+					i += 3;
+				else
+				{
+					std::swap(indices[i], indices[j - 2]);
+					std::swap(indices[i + 1], indices[j - 1]);
+					std::swap(indices[i+2], indices[j]);
+
+					std::swap(normals[i / 3], normals[(j - 2) / 3]);
+					std::swap(transformedNormals[i / 3], transformedNormals[(j - 2) / 3]);
+
+					j -= 3;
+				}
+			}
+
+			// abort split if one of the sides is empty
+			UINT leftCount = i - node.firstPrim;
+			if (leftCount == 0 || leftCount == node.primCount) 
+				return;
+
+			// create child nodes
+			UINT leftChildIdx = ++nodesUsed;
+			UINT rightChildIdx = ++nodesUsed;
+
+			node.leftChild = leftChildIdx;
+
+			pBVHNodes[leftChildIdx].firstPrim = node.firstPrim;
+			pBVHNodes[leftChildIdx].primCount = leftCount;
+			pBVHNodes[rightChildIdx].firstPrim = i;
+			pBVHNodes[rightChildIdx].primCount = node.primCount - leftCount;
+			node.primCount = 0;
+
+			UpdateNodeBounds(leftChildIdx);
+			UpdateNodeBounds(rightChildIdx);
+
+			// recurse
+			Subdivide(leftChildIdx);
+			Subdivide(rightChildIdx);
+		}
+#pragma endregion
 	};
 #pragma endregion
 #pragma region LIGHT
