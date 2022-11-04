@@ -115,11 +115,11 @@ namespace dae
 			{
 				if (mouseX != 0)
 				{
-					totalPitch -= mouseX * rotationSpeed * deltaTime;
+					totalPitch += mouseX * rotationSpeed * deltaTime;
 				}
 				if (mouseY != 0)
 				{
-					totalYaw -= mouseY * rotationSpeed * deltaTime;
+					totalYaw += mouseY * rotationSpeed * deltaTime;
 				}
 			}
 			//forward and backward translation with mouse
