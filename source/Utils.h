@@ -4,9 +4,7 @@
 #include "Math.h"
 #include "DataTypes.h"
 #include <iostream>
-#include <xmmintrin.h>
-
-#define UINT unsigned int
+#include <xmmintrin.h>	
 
 namespace dae
 {
@@ -340,15 +338,31 @@ namespace dae
 
 			return tmax > 0 && tmax >= tmin;
 		}
+#ifdef USE_SIMD
+		float IntersectAABB_SSE(const Ray& ray, const __m128 bmin4, const __m128 bmax4)
+		{
+			static __m128 mask4 = _mm_cmpeq_ps(_mm_setzero_ps(), _mm_set_ps(1, 0, 0, 0));
+			__m128 t1 = _mm_mul_ps(_mm_sub_ps(_mm_and_ps(bmin4, mask4), ray.O4), ray.rD4);
+			__m128 t2 = _mm_mul_ps(_mm_sub_ps(_mm_and_ps(bmax4, mask4), ray.O4), ray.rD4);
+			__m128 vmax4 = _mm_max_ps(t1, t2), vmin4 = _mm_min_ps(t1, t2);
+			float tmax = std::min(vmax4.m128_f32[0], std::min(vmax4.m128_f32[1], vmax4.m128_f32[2]));
+			float tmin = std::max(vmin4.m128_f32[0], std::max(vmin4.m128_f32[1], vmin4.m128_f32[2]));
+		
+			return tmax > 0 && tmax >= tmin;
+		}
+#endif // USE_SIMD
 
-		inline void IntersectBVH(const TriangleMesh& mesh, const Ray& ray, const UINT nodeIdx, 
+		inline void IntersectBVH(const TriangleMesh& mesh, const Ray& ray, const UINT nodeIdx,
 			bool& hasHit, HitRecord& hitRecord, bool ignoreHitRecord,
 			HitRecord& tempHitRecord, Triangle& triangle)
 		{
 			BVHNode& node = mesh.pBVHNodes[nodeIdx];
 
+#ifdef USE_SIMD
+			if (!IntersectAABB_SSE(ray, node.aabbMin4, node.aabbMax4)) return;
+#else
 			if (!SlabTest_TriangleMesh(node.aabbMin, node.aabbMax, ray)) return;
-
+#endif // USE_SIMD
 			if (node.primCount <= 0)
 			{
 				IntersectBVH(mesh, ray, node.leftChild, hasHit, hitRecord, ignoreHitRecord, tempHitRecord, triangle);
@@ -379,6 +393,7 @@ namespace dae
 					continue;
 			}
 		}
+		
 
 		inline bool HitTest_TriangleMesh(const TriangleMesh& mesh, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{

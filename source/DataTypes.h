@@ -1,11 +1,23 @@
 #pragma once
 #include <cassert>
 
+#include <xmmintrin.h>
+
 #include "Math.h"
 #include "vector"
 
-#define UINT unsigned int
 //#define USE_BVH
+
+#ifdef USE_BVH
+	#define Part1_Basics
+	//#define Part2_Fast_Rays
+	//#define Part3_Quick_Build
+#endif // USE_BVH
+
+//#define USE_SIMD
+
+#define UINT unsigned int
+#define BINS 8
 
 namespace dae
 {
@@ -33,15 +45,61 @@ namespace dae
 		NoCulling
 	};
 
-	// How to build a BVH. (2022, April 13). From JBikker
+	// How to build a BVH - Basics. (2022, April 13). From JBikker
 	// https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
-
 	struct BVHNode
 	{
+#ifdef USE_SIMD
+		union
+		{
+			struct { Vector3 aabbMin; UINT leftFirst; };
+			__m128 aabbMin4;
+		};
+		union
+		{
+			struct { Vector3 aabbMax; UINT primCount; };
+			__m128 aabbMax4;
+		};
+#else
 		Vector3 aabbMin, aabbMax;	// 24 bytes
 		UINT leftChild;				// 4 bytes
 		UINT firstPrim;				// 4 bytes
 		UINT primCount;				// 4 bytes; total: 36 bytes
+#endif // USE_SIMD
+	};
+
+	// How to build a BVH - Faster Rays. (2022, April 18). From JBikker
+	// https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
+	struct AABB
+	{
+		Vector3 bmin = Vector3{ FLT_MAX, FLT_MAX, FLT_MAX };
+		Vector3 bmax = Vector3{ FLT_MIN, FLT_MIN, FLT_MIN };
+		
+		void Grow(Vector3 p)
+		{
+			bmin = Vector3::Min(bmin, p);
+			bmax = Vector3::Max(bmax, p);
+		}
+
+		void Grow(AABB& p)
+		{
+			bmin = Vector3::Min(bmin, p.bmin);
+			bmax = Vector3::Max(bmax, p.bmax);
+		}
+
+		float Area()
+		{
+			Vector3 e = bmax - bmin; // box extent
+			return e.x * e.y + e.y * e.z + e.z * e.x;
+		}
+	};
+
+	// How to build a BVH - Quick Builds. (2022, April 21). From JBikker
+	// https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/
+	struct Bin
+	{
+		AABB bounds; 
+		int primCount = 0;
 	};
 
 	struct Triangle
@@ -152,6 +210,8 @@ namespace dae
 
 		void CalculateNormals()
 		{
+			normals.resize(indices.size() / 3);
+
 			for (size_t i{}; i < indices.size(); i += 3)
 			{
 				const Vector3 edgeV0V1 = positions[indices[i + 1]] - positions[indices[i]];
@@ -173,15 +233,15 @@ namespace dae
 			const auto finalTransform = scaleTransform * rotationTransform * translationTransform;
 			
 			//Transform Positions (positions > transformedPositions)
-			for (auto& position : positions)
+			for (const auto& position : positions)
 				transformedPositions.emplace_back(finalTransform.TransformPoint(position));
 			
+			//Transform Normals (normals > transformedNormals)
+			for (const auto& normal : normals)
+				transformedNormals.emplace_back(finalTransform.TransformVector(normal));
+
 			//Update AABB
 			UpdateTransformedAABB(finalTransform);
-
-			//Transform Normals (normals > transformedNormals)
-			for (auto& normal : normals)
-				transformedNormals.emplace_back(finalTransform.TransformVector(normal));
 		}
 
 		void UpdateAABB()
@@ -191,7 +251,7 @@ namespace dae
 				minAABB = positions[0];
 				maxAABB = positions[0];
 
-				for (auto& p : positions)
+				for (const auto& p : positions)
 				{
 					minAABB = Vector3::Min(p, minAABB);
 					maxAABB = Vector3::Max(p, maxAABB);
@@ -238,11 +298,11 @@ namespace dae
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
 			// (xmax, ymax, zmax) G
-			tAABB = finalTransform.TransformPoint(maxAABB.x, maxAABB.y, maxAABB.z);
+			tAABB = finalTransform.TransformPoint(maxAABB);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
-			// (xmin, ymax, zmin) H
-			tAABB = finalTransform.TransformPoint(minAABB.x, maxAABB.y, minAABB.z);
+			// (xmin, ymax, zmax) H
+			tAABB = finalTransform.TransformPoint(minAABB.x, maxAABB.y, maxAABB.z);
 			tMinAABB = Vector3::Min(tAABB, tMinAABB);
 			tMaxAABB = Vector3::Max(tAABB, tMaxAABB);
 
@@ -250,16 +310,16 @@ namespace dae
 			transformedMaxAABB = tMaxAABB;
 		}
 
-// How to build a BVH. (2022, April 13). From JBikker
+// How to build a BVH - Basics. (2022, April 13). From JBikker
 // https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/
-#pragma region BVH
+#pragma region BVH_Basics
 		void UpdateBVH()
 		{
 			nodesUsed = 0;
 
 			BVHNode& root = pBVHNodes[rootNodeIdx];
-			root.leftChild = 0;
 			root.firstPrim = 0;
+			root.leftChild = 0;
 			root.primCount = static_cast<UINT>(indices.size());
 
 			UpdateNodeBounds(rootNodeIdx);
@@ -288,12 +348,52 @@ namespace dae
 			BVHNode& node = pBVHNodes[nodeIdx];
 			if (node.primCount <= 6) return;
 
-			// determine split axis and position
+#ifdef Part1_Basics
 			Vector3 extent = node.aabbMax - node.aabbMin;
 			int axis = 0;
 			if (extent.y > extent.x) axis = 1;
 			if (extent.z > extent[axis]) axis = 2;
 			float splitPos = node.aabbMin[axis] + extent[axis] * 0.5f;
+#elif defined(Part2_Fast_Rays)
+			// How to build a BVH - Faster Rays. (2022, April 18). From JBikker
+			// https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
+			// determine split axis using SAH
+			int bestAxis = -1;
+			float bestPos = 0, bestCost = FLT_MAX;
+			for (int axis = 0; axis < 3; axis++) for (UINT i = 0; i < node.primCount; i++)
+			{
+				Vector3 centroid = {
+					(transformedPositions[indices[i]]
+					+ transformedPositions[indices[i + 1]]
+					+ transformedPositions[indices[i + 2]])
+					/ 3.0f };
+				float candidatePos = centroid[axis];
+				float cost = EvaluateSAH(node, axis, candidatePos);
+				if (cost < bestCost)
+					bestPos = candidatePos, bestAxis = axis, bestCost = cost;
+			}
+			int axis = bestAxis;
+			float splitPos = bestPos;
+
+			Vector3 e = node.aabbMax - node.aabbMin; // extent of parent
+			float parentArea = e.x * e.y + e.y * e.z + e.z * e.x;
+			float parentCost = node.primCount * parentArea;
+
+			if (bestCost >= parentCost) return;
+#elif defined(Part3_Quick_Build)
+			// How to build a BVH - Quick Builds. (2022, April 21). From JBikker
+			// https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/
+			// determine split axis using SAH
+			int axis{ -1 };
+			float splitPos{ 0 };
+
+			float splitCost{ FindBestSplitPlane(node, axis, splitPos) };
+
+			const float noSplitCost{ CalculateNodeCost(node) };
+			if (splitCost >= noSplitCost) return;
+#else
+			float splitPos{}, axis{};
+#endif // Part1
 
 			// in-place partition
 			int i = static_cast<int>(node.firstPrim);
@@ -347,6 +447,135 @@ namespace dae
 			Subdivide(rightChildIdx);
 		}
 #pragma endregion
+// How to build a BVH - Faster Rays. (2022, April 18). From JBikker
+// https://jacco.ompf2.com/2022/04/18/how-to-build-a-bvh-part-2-faster-rays/
+#pragma region Faster_Rays
+		float EvaluateSAH(BVHNode& node, int axis, float pos)
+		{
+			// determine triangle counts and bounds for this split candidate
+			AABB leftBox, rightBox;
+			int leftCount = 0, rightCount = 0;
+			for (UINT i = 0; i < node.primCount; i += 3)
+			{
+				const Vector3 vertex0 = transformedPositions[indices[i]];
+				const Vector3 vertex1 = transformedPositions[indices[i + 1]];
+				const Vector3 vertex2 = transformedPositions[indices[i + 2]];
+				
+				Vector3 centroid = { (vertex0 + vertex1 + vertex2) / 3.0f };
+
+				if (centroid[axis] < pos)
+				{
+					leftCount++;
+					leftBox.Grow(vertex0);
+					leftBox.Grow(vertex1);
+					leftBox.Grow(vertex2);
+				}
+				else
+				{
+					rightCount++;
+					rightBox.Grow(vertex0);
+					rightBox.Grow(vertex1);
+					rightBox.Grow(vertex2);
+				}
+			}
+			float cost = leftCount * leftBox.Area() + rightCount * rightBox.Area();
+			return cost > 0 ? cost : FLT_MAX;
+		}
+#pragma endregion
+// How to build a BVH - Quick Builds. (2022, April 21). From JBikker
+// https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/
+#pragma region Quick_Builds
+		float FindBestSplitPlane(BVHNode& node, int& axis, float& splitPos)
+		{
+			float bestCost = FLT_MAX;
+			for (int a = 0; a < 3; a++)
+			{
+				float boundsMin = FLT_MAX, boundsMax = FLT_MIN;
+				for (UINT i = 0; i < node.primCount; i += 3)
+				{
+					const Vector3 vertex0 = transformedPositions[indices[i]];
+					const Vector3 vertex1 = transformedPositions[indices[i + 1]];
+					const Vector3 vertex2 = transformedPositions[indices[i + 2]];
+
+					Vector3 centroid = { (vertex0 + vertex1 + vertex2) / 3.0f };
+
+					boundsMin = std::min(boundsMin, centroid[a]);
+					boundsMax = std::max(boundsMax, centroid[a]);
+				}
+
+				//if (boundsMin == boundsMax) continue;
+				if (abs(boundsMin - boundsMax) < FLT_EPSILON) continue;
+				
+				// populate the bins
+				Bin bin[BINS];
+				float scale = BINS / (boundsMax - boundsMin);
+				for (UINT i = 0; i < node.primCount; i += 3)
+				{
+					const Vector3 vertex0 = transformedPositions[indices[i]];
+					const Vector3 vertex1 = transformedPositions[indices[i + 1]];
+					const Vector3 vertex2 = transformedPositions[indices[i + 2]];
+
+					Vector3 centroid = { (vertex0 + vertex1 + vertex2) / 3.0f };
+
+					int binIdx = std::min(BINS - 1,
+						(int)((centroid[a] - boundsMin) * scale));
+					
+					bin[binIdx].primCount += 3;
+					bin[binIdx].bounds.Grow(vertex0);
+					bin[binIdx].bounds.Grow(vertex1);
+					bin[binIdx].bounds.Grow(vertex2);
+				}
+				
+				// gather data for the 7 planes between the 8 bins
+				float leftArea[BINS - 1]{};
+				float rightArea[BINS - 1]{};
+
+				int leftCount[BINS - 1]{};
+				int rightCount[BINS - 1]{};
+
+				AABB leftBox;
+				AABB rightBox;
+
+				int leftSum = 0;
+				int rightSum = 0;
+
+				for (int i = 0; i < BINS - 1; i++)
+				{
+					leftSum += bin[i].primCount;
+					leftCount[i] = leftSum;
+					leftBox.Grow(bin[i].bounds);
+					leftArea[i] = leftBox.Area();
+
+					rightSum += bin[BINS - 1 - i].primCount;
+					rightCount[BINS - 2 - i] = rightSum;
+					rightBox.Grow(bin[BINS - 1 - i].bounds);
+					rightArea[BINS - 2 - i] = rightBox.Area();
+				}
+				
+				// calculate SAH cost for the 7 planes
+				scale = (boundsMax - boundsMin) / BINS;
+
+				for (int i{}; i < BINS - 1; ++i)
+				{
+					float planeCost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+					if (planeCost < bestCost)
+					{
+						axis = a;
+						splitPos = boundsMin + scale * (i + 1);
+						bestCost = planeCost;
+					}
+				}
+			}
+
+			return bestCost;
+		}
+		float CalculateNodeCost(BVHNode& node)
+		{
+			Vector3 e = node.aabbMax - node.aabbMin; // extent of the node
+			float surfaceArea = e.x * e.y + e.y * e.z + e.z * e.x;
+			return node.primCount * surfaceArea;
+		}
+#pragma endregion
 	};
 #pragma endregion
 #pragma region LIGHT
@@ -369,9 +598,15 @@ namespace dae
 #pragma region MISC
 	struct Ray
 	{
+#ifdef USE_SIMD
+		Ray() { O4 = D4 = rD4 = _mm_set1_ps(1); }
+		union { struct { Vector3 origin; float dummy1; }; __m128 O4; };
+		union { struct { Vector3 direction; float dummy2; }; __m128 D4; };
+		union { struct { Vector3 rD; float dummy3; }; __m128 rD4; };
+#else
 		Vector3 origin{};
 		Vector3 direction{};
-
+#endif // USE_SIMD
 		float min{ 0.0001f };
 		float max{ FLT_MAX };
 	};

@@ -120,8 +120,11 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 	// For each pixel ...
 	// ... Ray Direction calculations above
 	// Ray we are casting from the camera towards each pixel
-	Ray viewRay{ camera.origin, rayDirection };
-
+	
+//	Ray viewRay{ camera.origin, rayDirection };
+	Ray viewRay{};
+	viewRay.origin = camera.origin;
+	viewRay.direction = rayDirection;
 	// Color to write to the color buffer (default = black)
 	ColorRGB finalColor = {};
 
@@ -146,7 +149,10 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 			{
 				const float lightRayLength = directionToLight.Normalize();
 
-				Ray lightRay{ closestHit.origin, directionToLight };
+				//Ray lightRay{ closestHit.origin, directionToLight };
+				Ray lightRay{};
+				lightRay.origin = closestHit.origin;
+				lightRay.direction = directionToLight;
 				lightRay.min = offSet;
 				lightRay.max = lightRayLength;
 
