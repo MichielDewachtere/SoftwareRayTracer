@@ -54,7 +54,10 @@ namespace dae
 		{
 			//todo: W3
 			float dot = Vector3::Dot(h, v);
-			float x = std::powf(1 - std::max(dot, 0.f), 5);
+			float y = 1 - std::max(dot, 0.f);
+
+			//float x = std::powf(1 - std::max(dot, 0.f), 5);
+			float x = y * y * y * y * y;
 
 			return { f0 + (colors::White - f0) * x };
 		}

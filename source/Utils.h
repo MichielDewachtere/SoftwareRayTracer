@@ -97,7 +97,9 @@ namespace dae
 		{
 			//todo W1
 			float dp = Vector3::Dot(sphere.origin - ray.origin, ray.direction);
-			
+			if (dp < 0)
+				return false;
+
 			float tclSquared = (sphere.origin - ray.origin).SqrMagnitude();
 
 			float odSquared = tclSquared - (dp * dp);
@@ -318,20 +320,20 @@ namespace dae
 #pragma region TriangeMesh HitTest
 		inline bool SlabTest_TriangleMesh(Vector3 minAABB, Vector3 maxAABB, const Ray& ray)
 		{
-			const float tx1 = (minAABB.x - ray.origin.x) / ray.direction.x;
-			const float tx2 = (maxAABB.x - ray.origin.x) / ray.direction.x;
+			const float tx1 = (minAABB.x - ray.origin.x) * ray.reversedDirection.x;
+			const float tx2 = (maxAABB.x - ray.origin.x) * ray.reversedDirection.x;
 
 			float tmin = std::min(tx1, tx2);
 			float tmax = std::max(tx1, tx2);
 
-			const float ty1 = (minAABB.y - ray.origin.y) / ray.direction.y;
-			const float ty2 = (maxAABB.y - ray.origin.y) / ray.direction.y;
+			const float ty1 = (minAABB.y - ray.origin.y) * ray.reversedDirection.y;
+			const float ty2 = (maxAABB.y - ray.origin.y) * ray.reversedDirection.y;
 
 			tmin = std::max(tmin, std::min(ty1, ty2));
 			tmax = std::min(tmax, std::max(ty1, ty2));
 
-			const float tz1 = (minAABB.z - ray.origin.z) / ray.direction.z;
-			const float tz2 = (maxAABB.z - ray.origin.z) / ray.direction.z;
+			const float tz1 = (minAABB.z - ray.origin.z) * ray.reversedDirection.z;
+			const float tz2 = (maxAABB.z - ray.origin.z) * ray.reversedDirection.z;
 
 			tmin = std::max(tmin, std::min(tz1, tz2));
 			tmax = std::min(tmax, std::max(tz1, tz2));
