@@ -33,7 +33,12 @@ namespace dae {
 
 		for (const Sphere& sphereMesh : m_SphereGeometries)
 		{
-			GeometryUtils::HitTest_Sphere(sphereMesh, ray, tempHitRecord, false);
+#ifdef SPHERE_GEO
+			GeometryUtils::HitTest_Sphere_Geometric(sphereMesh, ray, tempHitRecord, false);
+#elif defined(SPHERE_ANA)
+			GeometryUtils::HitTest_Sphere_Analytic(sphereMesh, ray, tempHitRecord, false);
+#endif // SPHERE_GEO
+
 			if (tempHitRecord.t < closestHit.t && tempHitRecord.t > 0)
 			{
 				closestHit = tempHitRecord;
@@ -94,6 +99,7 @@ namespace dae {
 		Sphere s;
 		s.origin = origin;
 		s.radius = radius;
+		s.reversedRadius = 1 / radius;
 		s.materialIndex = materialIndex;
 
 		m_SphereGeometries.emplace_back(s);
