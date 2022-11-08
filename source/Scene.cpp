@@ -5,7 +5,7 @@
 namespace dae {
 
 #pragma region Base Scene
-	//Initialize Scene with Default Solid Color Material (RED)
+	//Initialize Scene with Default Solid Color Material (RED)	
 	Scene::Scene():
 		m_Materials({ new Material_SolidColor({1,0,0})})
 	{
