@@ -117,12 +117,10 @@ namespace dae
 
 			Vector3 halfVector = (v + l).Normalized();
 			ColorRGB f = BRDF::FresnelFunction_Schlick(halfVector, v, f0);
-			//return f;
 			
 			float d = BRDF::NormalDistribution_GGX(hitRecord.normal, halfVector, m_Roughness);
-			//return ColorRGB{ d,d,d };
+
 			float g = BRDF::GeometryFunction_Smith(hitRecord.normal, v, l, m_Roughness);
-			//return ColorRGB{ g,g,g };
 
 			ColorRGB specular = (f * d * g) / (4 * (/*std::max(*/Vector3::Dot(v, hitRecord.normal)/*, 0.f)*/ * /*std::max(*/Vector3::Dot(l, hitRecord.normal)/*, 0.f)*/));
 

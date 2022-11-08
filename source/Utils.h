@@ -99,20 +99,20 @@ namespace dae
 		inline bool HitTest_Sphere_Geometric(const Sphere& sphere, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			//todo W1
-			float dp = Vector3::Dot(sphere.origin - ray.origin, ray.direction);
+			const float dp = Vector3::Dot(sphere.origin - ray.origin, ray.direction);
 			if (dp < 0)
 				return false;
 
-			float tclSquared = (sphere.origin - ray.origin).SqrMagnitude();
+			const float tclSquared = (sphere.origin - ray.origin).SqrMagnitude();
 
-			float odSquared = tclSquared - (dp * dp);
+			const float odSquared = tclSquared - (dp * dp);
 			if (odSquared > sphere.radius * sphere.radius)
 				return false;
 
-			float tcaSquared = sphere.radius * sphere.radius - odSquared;
+			const float tcaSquared = sphere.radius * sphere.radius - odSquared;
 
 			//float t0 = dp - sqrt(tcaSquared);
-			float t0 = dp - Utils::fastSqrt(tcaSquared);
+			const float t0 = dp - Utils::fastSqrt(tcaSquared);
 
 			if (t0 < ray.min || t0 > ray.max)
 				return false;
@@ -181,11 +181,11 @@ namespace dae
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			//todo W1 COMPLETED
-			float dot2 = Vector3::Dot(ray.direction, plane.normal);
+			const float dot2 = Vector3::Dot(ray.direction, plane.normal);
 			if (dot2 > -FLT_EPSILON && dot2 < FLT_EPSILON)
 				return false;
 
-			float dot = Vector3::Dot((plane.origin - ray.origin), plane.normal);
+			const float dot = Vector3::Dot((plane.origin - ray.origin), plane.normal);
 
 			const float t = dot / dot2;
 

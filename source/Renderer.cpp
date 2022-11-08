@@ -154,16 +154,16 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 					continue;
 			}
 
-			directionToLight = directionToLight.Normalized();
-			
-			float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
-			if (lambertCos < 0)
-				continue;
-
 			switch (m_CurrentLightingMode)
 			{
 			case LightingMode::ObservedArea:
 			{
+				directionToLight = directionToLight.Normalized();
+
+				float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
+				if (lambertCos < 0)
+					continue;
+
 				tempCycleColor *= ColorRGB{ lambertCos,lambertCos,lambertCos };
 			}
 			break;
@@ -175,11 +175,17 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 				break;
 			case LightingMode::Combined:
 			{
+				directionToLight = directionToLight.Normalized();
+
+				float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
+				if (lambertCos < 0)
+					continue;
+
 				tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin) * lambertCos
 					* materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
 				break;
 			}
-			}	
+			}
 
 			finalColor += tempCycleColor;
 		}
