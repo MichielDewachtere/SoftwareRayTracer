@@ -62,10 +62,12 @@ namespace dae
 			HandleMouseInput(deltaTime, moveSpeed, rotationSpeed);
 
 			// Rotate camera
-			Matrix finalRotation = Matrix::CreateRotation(totalPitch, totalYaw, 0);
+			//Matrix finalRotation = Matrix::CreateRotation(totalPitch, totalYaw, 0);
+
+			Matrix finalRotation = Matrix::CreateRotationX(totalPitch) * Matrix::CreateRotationY(totalYaw);
 
 			forward = finalRotation.TransformVector(Vector3::UnitZ);
-			forward.Normalize();
+			//forward.Normalize();
 		}
 
 		void HandleKeyboardInput(float deltaTime, float moveSpeed)
@@ -115,11 +117,11 @@ namespace dae
 			{
 				if (mouseX != 0)
 				{
-					totalPitch += mouseX * rotationSpeed * deltaTime;
+					totalYaw += mouseX * rotationSpeed * deltaTime;
 				}
 				if (mouseY != 0)
 				{
-					totalYaw += mouseY * rotationSpeed * deltaTime;
+					totalPitch -= mouseY * rotationSpeed * deltaTime;
 				}
 			}
 			//forward and backward translation with mouse
