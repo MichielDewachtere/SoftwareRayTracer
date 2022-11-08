@@ -6,6 +6,9 @@
 #include <iostream>
 #include <xmmintrin.h>	
 
+#define SPHERE_GEO
+//#define SPHERE_ANA
+
 namespace dae
 {
 	namespace Utils
@@ -93,7 +96,7 @@ namespace dae
 	{
 #pragma region Sphere HitTest
 		//SPHERE HIT-TESTS
-		inline bool HitTest_Sphere(const Sphere& sphere, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
+		inline bool HitTest_Sphere_Geometric(const Sphere& sphere, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			//todo W1
 			float dp = Vector3::Dot(sphere.origin - ray.origin, ray.direction);
@@ -117,17 +120,60 @@ namespace dae
 			if (!ignoreHitRecord)
 			{
 				hitRecord.origin = ray.origin + ray.direction * t0;
-				hitRecord.normal = Vector3{ hitRecord.origin - sphere.origin } / sphere.radius;
+				hitRecord.normal = Vector3{ hitRecord.origin - sphere.origin } * sphere.reversedRadius;
 				hitRecord.t = t0;
 				hitRecord.didHit = true;
 				hitRecord.materialIndex = sphere.materialIndex;
 			}
 			return true;
 		}
+		inline bool HitTest_Sphere_Analytic(const Sphere& sphere, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
+		{
+			float t{}, t0{}, t1{};
+
+			Vector3 L = ray.origin - sphere.origin;
+			float a = Vector3::Dot(ray.direction, ray.direction);
+			float b = 2 * Vector3::Dot(ray.direction, L);
+			float c = Vector3::Dot(L, L) - (sphere.radius * sphere.radius);
+
+			float discr = b * b - 4 * a * c;
+			if (discr < 0) return false;
+			else if (discr == 0) t0 = t1 = -0.5f * b / a;
+			else 
+			{
+				float q = (b > 0) ?
+					-0.5f * (b + Utils::fastSqrt(discr)) :
+					-0.5f * (b - Utils::fastSqrt(discr));
+				t0 = q / a;
+				t1 = c / q;
+			}
+
+			t = std::min(t0, t1);
+
+
+			if (t < ray.min || t > ray.max)
+				return false;
+
+			if (!ignoreHitRecord)
+			{
+				hitRecord.origin = ray.origin + ray.direction * t;
+				hitRecord.normal = Vector3{ hitRecord.origin - sphere.origin } / sphere.radius;
+				hitRecord.t = t;
+				hitRecord.didHit = true;
+				hitRecord.materialIndex = sphere.materialIndex;
+			}
+
+			return true;
+		}
 		inline bool HitTest_Sphere(const Sphere& sphere, const Ray& ray)
 		{
 			HitRecord temp{};
-			return HitTest_Sphere(sphere, ray, temp, true);
+#ifdef SPHERE_GEO
+			return HitTest_Sphere_Geometric(sphere, ray, temp, true);
+#elif defined(SPHERE_ANA)
+			return HitTest_Sphere_Analytic(sphere, ray, temp, true);
+#endif // SPHERE_GEO
+
 		}
 #pragma endregion
 #pragma region Plane HitTest
@@ -199,28 +245,28 @@ namespace dae
 			if (Vector3::Dot(triangle.normal, ray.direction) == 0)
 				return false;
 
-			Vector3 center = { (triangle.v0 + triangle.v1 + triangle.v2) / 3 };
-			Vector3 L = center - ray.origin;
+			const Vector3 center = { (triangle.v0 + triangle.v1 + triangle.v2) / 3 };
+			const Vector3 L = center - ray.origin;
 			float t = Vector3::Dot(L, triangle.normal) / Vector3::Dot(ray.direction, triangle.normal);
 
 			if (t < ray.min || t > ray.max)
 				return false;
 
-			Vector3 p = ray.origin + t * ray.direction;
+			const Vector3 p = ray.origin + t * ray.direction;
 			
-			Vector3 edgeA = triangle.v1 - triangle.v0;
+			Vector3 edge = triangle.v1 - triangle.v0;
 			Vector3 pointToSide = p - triangle.v0;
-			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeA, pointToSide)) < 0)
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edge, pointToSide)) < 0)
 				return false;
 
-			Vector3 edgeB = triangle.v2 - triangle.v1;
+			edge = triangle.v2 - triangle.v1;
 			pointToSide = p - triangle.v1;
-			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeB, pointToSide)) < 0)
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edge, pointToSide)) < 0)
 				return false;
 
-			Vector3 edgeC = triangle.v0 - triangle.v2;
+			edge = triangle.v0 - triangle.v2;
 			pointToSide = p - triangle.v2;
-			if (Vector3::Dot(triangle.normal, Vector3::Cross(edgeC, pointToSide)) < 0)
+			if (Vector3::Dot(triangle.normal, Vector3::Cross(edge, pointToSide)) < 0)
 				return false;
 
 			if (!ignoreHitRecord)

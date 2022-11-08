@@ -26,6 +26,7 @@ namespace dae
 	{
 		Vector3 origin{};
 		float radius{};
+		float reversedRadius{};
 
 		unsigned char materialIndex{ 0 };
 	};
@@ -392,7 +393,8 @@ namespace dae
 			const float noSplitCost{ CalculateNodeCost(node) };
 			if (splitCost >= noSplitCost) return;
 #else
-			float splitPos{}, axis{};
+			float splitPos{};
+			int axis{};
 #endif // Part1
 
 			// in-place partition
