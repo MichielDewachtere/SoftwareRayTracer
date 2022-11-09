@@ -9,9 +9,9 @@
 //#define USE_BVH
 
 #ifdef USE_BVH
-	#define Part1_Basics
+	//#define Part1_Basics
 	//#define Part2_Fast_Rays
-	//#define Part3_Quick_Build
+	#define Part3_Quick_Build
 #endif // USE_BVH
 
 //#define USE_SIMD
@@ -402,12 +402,11 @@ namespace dae
 			int j = i + static_cast<int>(node.primCount) - 1;
 			while (i <= j)
 			{
-				const Vector3 centroid = { 
-					(transformedPositions[indices[i]] 
-					+ transformedPositions[indices[i + 1]] 
-					+ transformedPositions[indices[i + 2]]) 
-					/ 3.0f };
-			
+				const Vector3 vertex0 = transformedPositions[indices[i]];
+				const Vector3 vertex1 = transformedPositions[indices[i + 1]];
+				const Vector3 vertex2 = transformedPositions[indices[i + 2]];
+
+				const Vector3 centroid = { (vertex0 + vertex1 + vertex2) / 3.0f };
 
 				if (centroid[axis] < splitPos)
 					i += 3;
@@ -459,9 +458,9 @@ namespace dae
 			int leftCount = 0, rightCount = 0;
 			for (UINT i = 0; i < node.primCount; i += 3)
 			{
-				const Vector3 vertex0 = transformedPositions[indices[i]];
-				const Vector3 vertex1 = transformedPositions[indices[i + 1]];
-				const Vector3 vertex2 = transformedPositions[indices[i + 2]];
+				const Vector3 vertex0 = transformedPositions[indices[node.firstPrim + i]];
+				const Vector3 vertex1 = transformedPositions[indices[node.firstPrim + i + 1]];
+				const Vector3 vertex2 = transformedPositions[indices[node.firstPrim + i + 2]];
 				
 				const Vector3 centroid = { (vertex0 + vertex1 + vertex2) / 3.0f };
 
@@ -490,14 +489,15 @@ namespace dae
 		float FindBestSplitPlane(BVHNode& node, int& axis, float& splitPos) const
 		{
 			float bestCost = FLT_MAX;
-			for (int a = 0; a < 3; a++)
+			for (int a = 0; a < 3; ++a)
 			{
-				float boundsMin = FLT_MAX, boundsMax = FLT_MIN;
+				float boundsMin = FLT_MAX;
+				float boundsMax = FLT_MIN;
 				for (UINT i = 0; i < node.primCount; i += 3)
 				{
-					const Vector3 vertex0 = transformedPositions[indices[i]];
-					const Vector3 vertex1 = transformedPositions[indices[i + 1]];
-					const Vector3 vertex2 = transformedPositions[indices[i + 2]];
+					const Vector3 vertex0 = transformedPositions[indices[node.firstPrim + i]];
+					const Vector3 vertex1 = transformedPositions[indices[node.firstPrim + i + 1]];
+					const Vector3 vertex2 = transformedPositions[indices[node.firstPrim + i + 2]];
 
 					const Vector3 centroid = { (vertex0 + vertex1 + vertex2) / 3.0f };
 
@@ -513,9 +513,9 @@ namespace dae
 				float scale = BINS / (boundsMax - boundsMin);
 				for (UINT i = 0; i < node.primCount; i += 3)
 				{
-					const Vector3 vertex0 = transformedPositions[indices[i]];
-					const Vector3 vertex1 = transformedPositions[indices[i + 1]];
-					const Vector3 vertex2 = transformedPositions[indices[i + 2]];
+					const Vector3 vertex0 = transformedPositions[indices[node.firstPrim + i]];
+					const Vector3 vertex1 = transformedPositions[indices[node.firstPrim + i + 1]];
+					const Vector3 vertex2 = transformedPositions[indices[node.firstPrim + i + 2]];
 
 					const Vector3 centroid = { (vertex0 + vertex1 + vertex2) / 3.0f };
 
