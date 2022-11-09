@@ -347,7 +347,7 @@ namespace dae {
 		m_Meshes[1]->pBVHNodes = new BVHNode[m_Meshes[1]->indices.size()]{};
 #else
 		m_Meshes[1]->UpdateAABB();
-#endif
+#endif	
 		m_Meshes[1]->Translate({ 0, 4.5f, 0.f });
 		m_Meshes[1]->UpdateTransforms();
 
@@ -357,7 +357,7 @@ namespace dae {
 		m_Meshes[2]->pBVHNodes = new BVHNode[m_Meshes[2]->indices.size()]{};
 #else
 		m_Meshes[2]->UpdateAABB();
-#endif
+#endif				
 		m_Meshes[2]->Translate({ 1.75f, 4.5f, 0.f });
 		m_Meshes[2]->UpdateTransforms();
 

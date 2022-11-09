@@ -127,6 +127,7 @@ namespace dae
 			}
 			return true;
 		}
+
 		inline bool HitTest_Sphere_Analytic(const Sphere& sphere, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			float t{}, t0{}, t1{};
@@ -181,14 +182,11 @@ namespace dae
 		inline bool HitTest_Plane(const Plane& plane, const Ray& ray, HitRecord& hitRecord, bool ignoreHitRecord = false)
 		{
 			//todo W1 COMPLETED
-			const float dot2 = Vector3::Dot(ray.direction, plane.normal);
-			if (dot2 > -FLT_EPSILON && dot2 < FLT_EPSILON)
-				return false;
-
 			const float dot = Vector3::Dot((plane.origin - ray.origin), plane.normal);
+			const float dot2 = Vector3::Dot(ray.direction, plane.normal);
 
 			const float t = dot / dot2;
-
+			
 			if (t < ray.min || t > ray.max)
 				return false;
 

@@ -117,12 +117,12 @@ namespace dae
 
 			Vector3 halfVector = (v + l).Normalized();
 			ColorRGB f = BRDF::FresnelFunction_Schlick(halfVector, v, f0);
-			
-			float d = BRDF::NormalDistribution_GGX(hitRecord.normal, halfVector, m_Roughness);
 
-			float g = BRDF::GeometryFunction_Smith(hitRecord.normal, v, l, m_Roughness);
+			const float d = BRDF::NormalDistribution_GGX(hitRecord.normal, halfVector, m_Roughness);
 
-			ColorRGB specular = (f * d * g) / (4 * (/*std::max(*/Vector3::Dot(v, hitRecord.normal)/*, 0.f)*/ * /*std::max(*/Vector3::Dot(l, hitRecord.normal)/*, 0.f)*/));
+			const float g = BRDF::GeometryFunction_Smith(hitRecord.normal, v, l, m_Roughness);
+
+			const ColorRGB specular = (f * d * g) / (4 * (/*std::max(*/Vector3::Dot(v, hitRecord.normal)/*, 0.f)*/ * /*std::max(*/Vector3::Dot(l, hitRecord.normal)/*, 0.f)*/));
 
 			ColorRGB kd{};
 			if (!m_Metalness)
@@ -130,8 +130,8 @@ namespace dae
 			else
 				kd = ColorRGB{ 0,0,0 };
 
-			ColorRGB diffuse = BRDF::Lambert(kd, m_Albedo);
-			
+			const ColorRGB diffuse = BRDF::Lambert(kd, m_Albedo);
+
 			return { specular + diffuse };
 		}
 

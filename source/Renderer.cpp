@@ -106,13 +106,10 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 	const float rx = px + 0.5f;
 	const float ry = py + 0.5f;
 
-	const float cx = (2 * ((px) / float(m_Width)) - 1) * aspectRatio * fov;
-	const float cy = (1 - 2 * ((py) / float(m_Height))) * fov;
+	const float cx = (2 * ((rx) / float(m_Width)) - 1) * aspectRatio * fov;
+	const float cy = (1 - 2 * ((ry) / float(m_Height))) * fov;
 
-	Vector3 rayDirection{};
-	rayDirection.x = cx;
-	rayDirection.y = cy;
-	rayDirection.z = 1;
+	Vector3 rayDirection{ cx,cy,1 };
 
 	rayDirection = camera.cameraToWorld.TransformVector(rayDirection);
 	rayDirection.Normalize();
@@ -120,7 +117,7 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 	// For each pixel ...
 	// ... Ray Direction calculations above
 	// Ray we are casting from the camera towards each pixel
-	Ray viewRay{camera.origin, rayDirection};
+	Ray viewRay{ camera.origin, rayDirection };
 
 	// Color to write to the color buffer (default = black)
 	ColorRGB finalColor = {};
@@ -141,12 +138,22 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 			closestHit.origin += closestHit.normal * offSet;
 
 			Vector3 directionToLight = LightUtils::GetDirectionToLight(light, closestHit.origin);
-			
+			float lightRayLength = directionToLight.Magnitude();
+			directionToLight = directionToLight / lightRayLength;
+
+			if (m_CurrentLightingMode == LightingMode::ObservedArea
+				|| m_CurrentLightingMode == LightingMode::Combined)
+			{
+				float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
+				if (lambertCos < 0)
+					continue;
+				
+				tempCycleColor *= ColorRGB{ lambertCos,lambertCos,lambertCos };
+			}
+
 			if (m_ShadowsEnabled)
 			{
-				const float lightRayLength = directionToLight.Normalize();
-
-				Ray lightRay{closestHit.origin, directionToLight};
+				Ray lightRay{ closestHit.origin, directionToLight };
 				lightRay.min = offSet;
 				lightRay.max = lightRayLength;
 
@@ -154,37 +161,16 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 					continue;
 			}
 
-			switch (m_CurrentLightingMode)
+			if (m_CurrentLightingMode == LightingMode::Radiance
+				|| m_CurrentLightingMode == LightingMode::Combined)
 			{
-			case LightingMode::ObservedArea:
-			{
-				directionToLight = directionToLight.Normalized();
-
-				float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
-				if (lambertCos < 0)
-					continue;
-
-				tempCycleColor *= ColorRGB{ lambertCos,lambertCos,lambertCos };
-			}
-			break;
-			case LightingMode::Radiance:
 				tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin);
-				break;
-			case LightingMode::BRDF:
-				tempCycleColor *= materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
-				break;
-			case LightingMode::Combined:
-			{
-				directionToLight = directionToLight.Normalized();
-
-				float lambertCos = Vector3::Dot(closestHit.normal, directionToLight);
-				if (lambertCos < 0)
-					continue;
-
-				tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin) * lambertCos
-					* materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -viewRay.direction);
-				break;
 			}
+
+			if (m_CurrentLightingMode == LightingMode::Radiance
+				|| m_CurrentLightingMode == LightingMode::Combined)
+			{
+				tempCycleColor *= materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -rayDirection);
 			}
 
 			finalColor += tempCycleColor;
