@@ -167,7 +167,7 @@ void dae::Renderer::RenderPixel(Scene* pScene, uint32_t pixelIndex, float fov, f
 				tempCycleColor *= LightUtils::GetRadiance(light, closestHit.origin);
 			}
 
-			if (m_CurrentLightingMode == LightingMode::Radiance
+			if (m_CurrentLightingMode == LightingMode::BRDF
 				|| m_CurrentLightingMode == LightingMode::Combined)
 			{
 				tempCycleColor *= materials[closestHit.materialIndex]->Shade(closestHit, directionToLight, -rayDirection);
